@@ -1,0 +1,986 @@
+//Othello class====================================
+
+package othello;
+
+import java.io.*;
+import java.awt.*;
+import java.awt.geom.*;
+import java.awt.event.*;
+import javax.swing.*;
+
+public class Othello extends JFrame implements Runnable {
+    boolean animateFirstTime = true;
+    Image image;
+    Graphics2D g;
+
+    public static void main(String[] args) {
+        Othello frame = new Othello();
+        frame.setSize(Window.WINDOW_WIDTH, Window.WINDOW_HEIGHT);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+    }
+
+    public Othello() {
+        addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+
+                if (e.BUTTON1 == e.getButton() ) {
+                    int x = e.getX() - Window.getX(0);
+                    int y = e.getY() - Window.getY(0);
+                    Board.AddPiecePixel(x,y);
+                }
+
+                if (e.BUTTON3 == e.getButton()) {
+                }
+
+                repaint();
+            }
+        });
+            
+
+    addMouseMotionListener(new MouseMotionAdapter() {
+      public void mouseDragged(MouseEvent e) {
+
+        repaint();
+      }
+    });
+
+    addMouseMotionListener(new MouseMotionAdapter() {
+      public void mouseMoved(MouseEvent e) {
+
+        repaint();
+      }
+    });
+
+        addKeyListener(new KeyAdapter() {
+
+            public void keyPressed(KeyEvent e) {
+                if (e.VK_UP == e.getKeyCode()) {
+                } else if (e.VK_DOWN == e.getKeyCode()) {
+                } else if (e.VK_LEFT == e.getKeyCode()) {
+                } else if (e.VK_RIGHT == e.getKeyCode()) {
+                } else if (e.VK_ESCAPE == e.getKeyCode()) {
+                    reset();
+                }
+                repaint();
+            }
+        });
+        init();
+        start();
+    }
+    Thread relaxer;
+////////////////////////////////////////////////////////////////////////////
+    public void init() {
+        requestFocus();
+    }
+////////////////////////////////////////////////////////////////////////////
+    public void destroy() {
+    }
+////////////////////////////////////////////////////////////////////////////
+    public void paint(Graphics gOld) {
+        if (image == null || Window.xsize != getSize().width || Window.ysize != getSize().height) {
+            Window.xsize = getSize().width;
+            Window.ysize = getSize().height;
+            image = createImage(Window.xsize, Window.ysize);
+            g = (Graphics2D) image.getGraphics();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
+        }
+//fill background
+        
+        g.setColor(Color.cyan);
+        g.fillRect(0, 0, Window.xsize, Window.ysize);
+
+        int x[] = {Window.getX(0), Window.getX(Window.getWidth2()), Window.getX(Window.getWidth2()), Window.getX(0), Window.getX(0)};
+        int y[] = {Window.getY(0), Window.getY(0), Window.getY(Window.getHeight2()), Window.getY(Window.getHeight2()), Window.getY(0)};
+//fill border
+//added        
+        g.setColor(Color.green);
+        g.fillPolygon(x, y, 4);
+// draw border
+        g.setColor(Color.red);
+        g.drawPolyline(x, y, 5);
+
+        if (animateFirstTime) {
+            gOld.drawImage(image, 0, 0, null);
+            return;
+        }
+        
+              
+        Board.Draw(g);
+        
+        gOld.drawImage(image, 0, 0, null);
+    }
+
+////////////////////////////////////////////////////////////////////////////
+// needed for     implement runnable
+    public void run() {
+        while (true) {
+            animate();
+            repaint();
+            double seconds = .1;    //time that 1 frame takes.
+            int miliseconds = (int) (1000.0 * seconds);
+            try {
+                Thread.sleep(miliseconds);
+            } catch (InterruptedException e) {
+            }
+        }
+    }
+    
+/////////////////////////////////////////////////////////////////////////
+    public void reset() {
+        Player.Reset();
+        Board.Reset();
+    }
+/////////////////////////////////////////////////////////////////////////
+    public void animate() {
+
+        if (animateFirstTime) {
+            animateFirstTime = false;
+            if (Window.xsize != getSize().width || Window.ysize != getSize().height) {
+                Window.xsize = getSize().width;
+                Window.ysize = getSize().height;
+            }
+
+            reset();
+
+        }
+
+        
+    }
+
+////////////////////////////////////////////////////////////////////////////
+    public void start() {
+        if (relaxer == null) {
+            relaxer = new Thread(this);
+            relaxer.start();
+        }
+    }
+////////////////////////////////////////////////////////////////////////////
+    public void stop() {
+        if (relaxer.isAlive()) {
+            relaxer.stop();
+        }
+        relaxer = null;
+    }
+
+}
+
+ //Board class===============================================
+package othello;
+import java.awt.*;
+
+public class Board {
+    private final static int NUM_ROWS = 9;
+    private final static int NUM_COLUMNS = 8;      
+    private static Piece board[][] = new Piece[NUM_ROWS][NUM_COLUMNS];
+    private static boolean gameOver;
+    public static void Reset() {
+        gameOver = false;
+//Clear the board.
+        for (int zrow=0;zrow<NUM_ROWS;zrow++)
+            for (int zcol=0;zcol<NUM_COLUMNS;zcol++)
+                board[zrow][zcol] = null;     
+        board[3][3] = new Piece(Color.black);
+        board[4][4] = new Piece(Color.black);
+        board[3][4] = new Piece(Color.white);
+        board[4][3] = new Piece(Color.white);
+        CalculateScore();
+    }
+
+    public static void AddPiecePixel(int xpixel,int ypixel) {
+        if (xpixel < 0 || xpixel > Window.getWidth2())
+            return;
+        if (ypixel < 0 || ypixel > Window.getHeight2())
+            return;   
+        
+        int ydelta = Window.getHeight2()/NUM_ROWS;
+        int xdelta = Window.getWidth2()/NUM_COLUMNS;
+        
+//Find the column to add the piece to.        
+        int column = xpixel/xdelta;   
+        int row = ypixel/ydelta;   
+
+        if (board[row][column] != null)
+            return;
+        
+        
+        boolean goodMoveLeft = checkLeft(row,column);
+        if (goodMoveLeft)
+            flipLeft(row,column-1);
+        
+        boolean goodMoveRight = checkRight(row,column);
+        if (goodMoveRight)
+            flipRight(row,column+1);
+        
+        boolean goodMoveUp = checkUp(row,column);
+        if (goodMoveUp)
+            flipUp(row-1,column);
+
+////add or modify.  Uncomment the below code.
+        boolean goodMoveDown = checkDown(row,column);
+        if (goodMoveDown)
+            flipDown(row+1,column);
+        
+        boolean goodMoveDiagUpLeft = checkDiagUpLeft(row,column);
+        if (goodMoveDiagUpLeft)
+            flipDiagUpLeft(row-1,column-1);
+        
+        boolean goodMoveDiagDownLeft = checkDiagDownLeft(row,column);
+        if (goodMoveDiagDownLeft)
+            flipDiagDownLeft(row+1,column-1);
+        
+        boolean goodMoveDiagUpRight = checkDiagUpRight(row,column);
+        if (goodMoveDiagUpRight)
+            flipDiagUpRight(row-1,column+1);
+        
+        boolean goodMoveDiagDownRight = checkDiagDownRight(row,column);
+        if (goodMoveDiagDownRight)
+            flipDiagDownRight(row+1,column+1);
+        
+        
+//add or modify.  remember to add "!goodMoveDown &&" back into code.        
+        if (!goodMoveLeft && !goodMoveRight && !goodMoveUp && !goodMoveDown &&
+           !goodMoveDiagUpLeft && !goodMoveDiagDownLeft && !goodMoveDiagUpRight && !goodMoveDiagDownRight) {
+            System.out.println("return not valid");
+            return;
+        }
+        else
+            System.out.println("return valid");
+        board[row][column] = new Piece(Player.GetCurrentPlayer().getColor());
+
+        CalculateScore();
+        
+        Player.SwitchTurn();
+//add or modify.  Uncomment the below code.
+        if (!CanPlayerMove()) {
+            Player.SwitchTurn();
+            if (!CanPlayerMove()) {
+                gameOver = true;
+            }
+        }
+        
+    }
+    public static boolean CanPlayerMove() {
+//add or modify.  Loop through every square on the board and check to see if any empty squares are legal moves.
+        
+         for (int zrow=0;zrow<NUM_ROWS;zrow++) {
+            for (int zcol=0;zcol<NUM_COLUMNS;zcol++) {
+                if(board[zrow][zcol] == null) {
+                    if(checkRight(zrow,zcol))
+                        return (true);
+                    if(checkLeft(zrow,zcol))
+                        return (true);
+                    if(checkUp(zrow,zcol))
+                        return (true);
+                    if(checkDown(zrow,zcol))
+                        return (true);
+                    if(checkDiagUpLeft(zrow,zcol)) 
+                        return (true);
+                    if(checkDiagUpRight(zrow,zcol))
+                        return (true);
+                    if(checkDiagDownLeft(zrow,zcol))
+                        return (true);
+                    if(checkDiagDownRight(zrow,zcol))
+                        return (true);
+                }          
+ 
+            }
+        }
+        
+        return (false);
+    }
+    
+    
+    public static void CalculateScore() {
+        int score1 = 0; 
+        int score2 = 0;
+//add or modify.  Loop through every square on the board and determine if any player should add to their score.
+        
+        for (int zrow=0;zrow<NUM_ROWS;zrow++) {
+            for (int zcol=0;zcol<NUM_COLUMNS;zcol++) {
+                if(board[zrow][zcol] != null) {    
+                    if(board[zrow][zcol].getColor() == Color.white) {
+                        score1++;
+                    }
+                    else if(board[zrow][zcol].getColor() == Color.black) {
+                        score2++;
+                    }
+                }
+            }
+        }
+        
+//add or modify.  Uncomment the below code.
+        Player.GetPlayer1().setScore(score1);
+        Player.GetPlayer2().setScore(score2);
+    }
+    public static void flipRight(int row,int column)
+    {
+//save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currColumn = column;
+//while the current piece's color is the same as the opponents color        
+        while(board[row][currColumn].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[row][currColumn].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column            
+            currColumn++;   
+        }
+    }   
+    
+    public static void flipLeft(int row,int column)
+    {
+//save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currColumn = column;
+//while the current piece's color is the same as the opponents color        
+        while(board[row][currColumn].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[row][currColumn].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column            
+            currColumn--;   
+        }        
+    }
+    
+    public static void flipDown(int row,int column)
+    {
+//add or modify.  Add code here.
+        //save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currRow = row;
+//while the current piece's color is the same as the opponents color        
+        while(board[currRow][column].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[currRow][column].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column            
+            currRow++;   
+        }      
+    }   
+    
+    public static void flipUp(int row,int column)
+    {
+//save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currRow = row;
+//while the current piece's color is the same as the opponents color        
+        while(board[currRow][column].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[currRow][column].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column            
+            currRow--;   
+        }      
+    }    
+    
+    public static void flipDiagUpLeft(int row,int column)
+    {
+//save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currColumn = column;
+        int currRow = row;
+//while the current piece's color is the same as the opponents color        
+        while(board[currRow][currColumn].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[currRow][currColumn].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column and row          
+            currColumn--;   
+            currRow--;   
+        }        
+    }    
+    
+    
+    public static void flipDiagDownLeft(int row,int column)
+    {
+//save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currColumn = column;
+        int currRow = row;
+//while the current piece's color is the same as the opponents color        
+        while(board[currRow][currColumn].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[currRow][currColumn].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column and row          
+            currColumn--;   
+            currRow++;   
+        }        
+    }    
+        
+    public static void flipDiagUpRight(int row,int column)
+    {
+//save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currColumn = column;
+        int currRow = row;
+//while the current piece's color is the same as the opponents color        
+        while(board[currRow][currColumn].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[currRow][currColumn].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column and row          
+            currColumn++;   
+            currRow--;   
+        }        
+    }    
+
+    public static void flipDiagDownRight(int row,int column)
+    {
+//save the opponent's color        
+        Color opponentColor = board[row][column].getColor();   
+        int currColumn = column;
+        int currRow = row;
+//while the current piece's color is the same as the opponents color        
+        while(board[currRow][currColumn].getColor() == opponentColor) {   
+//change the current piece's color to the current player's color            
+            board[currRow][currColumn].setColor(Player.GetCurrentPlayer().getColor());  
+//go to the next column and row          
+            currColumn++;   
+            currRow++;   
+        }        
+    }    
+    
+    
+    
+    
+    public static boolean checkRight(int row,int column)
+    { 
+        if (column == NUM_COLUMNS-1) {
+            return(false);            
+        }
+        else if (board[row][column+1] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row][column+1].getColor())
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currColumn = column+2;
+        while (keepLooping) {
+            if (currColumn == NUM_COLUMNS) {   //going to run off the board
+                return(false);
+            }
+            else if (board[row][currColumn] == null) {   //current column is empty
+                return(false);
+            }
+                //current column is the opponent's color then go to next column
+            else if (Player.GetCurrentPlayer().getColor() != board[row][currColumn].getColor()) { 
+                currColumn++;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            } 
+        }
+        return (true);        
+    }    
+    
+    public static boolean checkLeft(int row,int column)
+    {
+        if (column == 0) {
+            return(false);            
+        }
+        else if (board[row][column-1] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row][column-1].getColor())
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currColumn = column-2;
+        while (keepLooping) {
+            if (currColumn == -1) {   //going to run off the board
+                return(false);
+            }
+            else if (board[row][currColumn] == null) {   //current column is empty
+                return(false);
+            }
+                //current column is the opponent's color then go to next column
+            else if (Player.GetCurrentPlayer().getColor() != board[row][currColumn].getColor()) { 
+                currColumn--;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            }
+        }
+        return (true);
+    }    
+////////////
+//add or modify.  Uncomment and add code.    
+    public static boolean checkDown(int row,int column)
+            {
+        if (row == 0) {
+            return(false);            
+        }
+        else if (board[row+1][column] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row+1][column].getColor())
+           
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currRow = row+2;
+        while (keepLooping) {
+            if (currRow == +1) {   //going to run off the board
+                return(false);
+            }
+            else if (board[currRow][column] == null) {   //current row is empty
+                return(false);
+            }
+                //current row is the opponent's color then go to next row
+            else if (Player.GetCurrentPlayer().getColor() != board[currRow][column].getColor()) { 
+                currRow++;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            } 
+        }
+        return (true);
+    }    
+//    {
+//        if (row == 0) {
+//            return(false);            
+//        }
+//        else if (board[row+1][column] == null) {
+//            return(false);
+//        }
+//        else if (Player.GetCurrentPlayer().getColor() == board[row+1][column].getColor())
+//        {
+//            return(false);
+//        }
+//
+//        boolean keepLooping = true;
+//        int currRow = row+2;
+//        while (keepLooping) {
+//            if (currRow == +1) {   //going to run off the board
+//                return(false);
+//            }
+//            else if (board[currRow][column] == null) {   //current row is empty
+//                return(false);
+//            }
+//                //current row is the opponent's color then go to next row
+//            else if (Player.GetCurrentPlayer().getColor() != board[currRow][column].getColor()) { 
+//                currRow++;
+//            }
+//            else {            //else it is a good selection so stop looping
+//                keepLooping = false;
+//            } 
+//        }
+//        return (true);
+//    }    
+    
+    public static boolean checkUp(int row,int column)
+    {
+        if (row == 0) {
+            return(false);            
+        }
+        else if (board[row-1][column] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row-1][column].getColor())
+           
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currRow = row-2;
+        while (keepLooping) {
+            if (currRow == -1) {   //going to run off the board
+                return(false);
+            }
+            else if (board[currRow][column] == null) {   //current row is empty
+                return(false);
+            }
+                //current row is the opponent's color then go to next row
+            else if (Player.GetCurrentPlayer().getColor() != board[currRow][column].getColor()) { 
+                currRow--;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            } 
+        }
+        return (true);
+    }    
+    
+        
+    public static boolean checkDiagUpLeft(int row,int column)
+    {
+        if (column == 0) {
+            return(false);            
+        }
+        else if (row == 0) {
+            return(false);            
+        }
+        else if (board[row-1][column-1] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row-1][column-1].getColor())
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currColumn = column-2;
+        int currRow = row-2;
+        while (keepLooping) {
+            if (currColumn == -1) {   //going to run off the board
+                return(false);
+            }
+            else if (currRow == -1) {   //going to run off the board
+                return(false);
+            }
+            else if (board[currRow][currColumn] == null) {   //current column,row is empty
+                return(false);
+            }
+                //current column,row is the opponent's color then go to next column,row
+            else if (Player.GetCurrentPlayer().getColor() != board[currRow][currColumn].getColor()) { 
+                currColumn--;
+                currRow--;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            } 
+        }
+        return (true);
+    }     
+    
+    public static boolean checkDiagDownLeft(int row,int column)
+    {
+        if (column == 0) {
+            return(false);            
+        }
+        else if (row == NUM_ROWS-1) {
+            return(false);            
+        }
+        else if (board[row+1][column-1] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row+1][column-1].getColor())
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currColumn = column-2;
+        int currRow = row+2;
+        while (keepLooping) {
+            if (currColumn == -1) {   //going to run off the board
+                return(false);
+            }
+            else if (currRow == NUM_ROWS) {   //going to run off the board
+                return(false);
+            }
+            else if (board[currRow][currColumn] == null) {   //current column,row is empty
+                return(false);
+            }
+                //current column,row is the opponent's color then go to next column,row
+            else if (Player.GetCurrentPlayer().getColor() != 
+            board[currRow][currColumn].getColor()) { 
+                currColumn--;
+                currRow++;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            } 
+        }
+        return (true);
+    }     
+
+    public static boolean checkDiagUpRight(int row,int column)
+    {
+        if (column == NUM_COLUMNS-1) {
+            return(false);            
+        }
+        else if (row == 0) {
+            return(false);            
+        }
+        else if (board[row-1][column+1] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row-1][column+1].getColor())
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currColumn = column+2;
+        int currRow = row-2;
+        while (keepLooping) {
+            if (currColumn == NUM_COLUMNS) {   //going to run off the board
+                return(false);
+            }
+            else if (currRow == -1) {   //going to run off the board
+                return(false);
+            }
+            else if (board[currRow][currColumn] == null) {   //current column,row is empty
+                return(false);
+            }
+                //current column,row is the opponent's color then go to next column,row
+            else if (Player.GetCurrentPlayer().getColor() != board[currRow][currColumn].getColor()) { 
+                currColumn++;
+                currRow--;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            } 
+        }
+        return (true);
+    }     
+        
+    public static boolean checkDiagDownRight(int row,int column)
+    {
+        if (column == NUM_COLUMNS-1) {
+            return(false);            
+        }
+        else if (row == NUM_ROWS-1) {
+            return(false);            
+        }
+        else if (board[row+1][column+1] == null) {
+            return(false);
+        }
+        else if (Player.GetCurrentPlayer().getColor() == board[row+1][column+1].getColor())
+        {
+            return(false);
+        }
+
+        boolean keepLooping = true;
+        int currColumn = column+2;
+        int currRow = row+2;
+        while (keepLooping) {
+            if (currColumn == NUM_COLUMNS) {   //going to run off the board
+                return(false);
+            }
+            else if (currRow == NUM_ROWS) {   //going to run off the board
+                return(false);
+            }
+            else if (board[currRow][currColumn] == null) {   //current column,row is empty
+                return(false);
+            }
+                //current column,row is the opponent's color then go to next column,row
+            else if (Player.GetCurrentPlayer().getColor() != board[currRow][currColumn].getColor()) { 
+                currColumn++;
+                currRow++;
+            }
+            else {            //else it is a good selection so stop looping
+                keepLooping = false;
+            } 
+        }
+        return (true);
+    }     
+        
+        
+        
+    public static void Draw(Graphics2D g) {
+        int ydelta = Window.getHeight2()/NUM_ROWS;
+        int xdelta = Window.getWidth2()/NUM_COLUMNS;
+
+//Draw the grid.        
+        g.setColor(Color.black);
+        for (int zi = 1;zi<NUM_ROWS;zi++)
+        {
+            g.drawLine(Window.getX(0),Window.getY(zi*ydelta),
+                    Window.getX(Window.getWidth2()),Window.getY(zi*ydelta));
+        }
+        
+        for (int zi = 1;zi<NUM_COLUMNS;zi++)
+        {
+            g.drawLine(Window.getX(zi*xdelta),Window.getY(0),
+                    Window.getX(zi*xdelta),Window.getY(Window.getHeight2()));
+        }
+        
+//Draw the pieces on the board.        
+        for (int zrow=0;zrow<NUM_ROWS;zrow++)
+        {
+            for (int zcol=0;zcol<NUM_COLUMNS;zcol++)        
+            {
+                if (board[zrow][zcol] != null)
+                    board[zrow][zcol].draw(g, zrow, zcol,xdelta, ydelta);
+            }
+        }  
+        
+        if (gameOver) {
+            
+//add or modify.  Uncomment the below code.
+            if (Player.GetPlayer1().getScore() > Player.GetPlayer2().getScore()) {
+                g.setColor(Color.black);
+                g.setFont(new Font("Arial",Font.PLAIN,30));
+                g.drawString("Player1 has won.",210,65);                  
+            } else if (Player.GetPlayer1().getScore() < Player.GetPlayer2().getScore()) {
+                g.setColor(Color.black);
+                g.setFont(new Font("Arial",Font.PLAIN,30));
+                g.drawString("Player2 has won.",210,65);                 
+            } else {
+                g.setColor(Color.black);
+                g.setFont(new Font("Arial",Font.PLAIN,30));
+                g.drawString("It is a tie.",250,65);                 
+            }
+            
+        } else {
+            g.setColor(Color.black);
+            g.setFont(new Font("Arial",Font.PLAIN,30));
+            g.drawString(Player.DisplayCurrentPlayer(),230,65); 
+        }
+     
+//add or modify.  Display each player's score.        
+            g.setColor(Color.black);
+            g.setFont(new Font("Arial",Font.PLAIN,20));
+  //        g.drawString("Player 1 Score:" + Player.GetPlayer1().setScore(score1),80,65); 
+    //      g.drawString("Player 2 Score:" + Player.GetPlayer2().setScore(score2),450,65); 
+            
+            
+    }
+//    Player.GetPlayer1().setScore(score1);
+//    Player.GetPlayer2().setScore(score2)
+ 
+}
+
+//Piece class============================
+
+package othello;
+import java.awt.*;
+
+public class Piece {
+    private Color color;
+    Piece(Color _color)
+    {
+        color = _color;       
+    }
+    public Color getColor()
+    {
+        return (color);
+    }
+    public void setColor(Color _color)
+    {
+        color = _color;
+    }
+    public void draw(Graphics2D g,int row,int column,int xdelta,int ydelta) {
+        g.setColor(color);
+        g.fillOval(Window.getX(column*xdelta), Window.getY(row*ydelta), xdelta, ydelta);
+    }
+    
+}
+
+ 
+//Player class===============================================
+
+package othello;
+
+import java.awt.Color;
+
+public class Player {
+    
+    private static Player currentTurn;
+    private static Player players[] = new Player[2];
+    private Color color;    
+//add or modify.  Added for you.    
+    private int score;
+
+    public static void Reset()
+    {           
+        players[0] = new Player(Color.white);
+        players[1] = new Player(Color.black);
+        currentTurn = players[0];
+//add or modify.  Uncomment the below code and replace the ??
+        players[0].score = 0;
+        players[1].score = 0;
+        
+    }
+    public static String DisplayCurrentPlayer()
+    {
+        if (currentTurn == players[0])
+            return("Player1 White");
+        else
+            return("Player2 Black");
+    }
+    public static Player GetCurrentPlayer()
+    {
+        return(currentTurn);
+    }
+    public static void SwitchTurn()
+    {
+        if (currentTurn == players[0])
+            currentTurn = players[1];
+        else
+            currentTurn = players[0];
+    }
+    public static Player GetPlayer1() {
+        return(players[0]);
+    }
+    public static Player GetPlayer2() {
+        return(players[1]);
+    }    
+    Player(Color _color)
+    {
+        color = _color;
+    }
+    public Color getColor()
+    {
+        return (color);
+    }
+//add or modify.  Uncomment the below code and replace the ??
+    public int getScore()
+    {
+        return (score);
+    }
+    public void setScore(int _score)
+    {
+        score = _score;
+        
+        
+        
+    }
+
+
+
+}
+
+//Window class============================
+
+package othello;
+
+public class Window {
+    private static final int XBORDER = 20;
+//    private static final int YBORDER = 20;
+    private static final int TOP_BORDER = 40;
+    private static final int BOTTOM_BORDER = 20;
+    private static final int YTITLE = 30;
+    private static final int WINDOW_BORDER = 8;
+    
+    
+    static final int WINDOW_WIDTH = 2*(WINDOW_BORDER + XBORDER) + 600;
+    static final int WINDOW_HEIGHT = YTITLE + WINDOW_BORDER + 600;
+    static int xsize = -1;
+    static int ysize = -1;
+
+
+/////////////////////////////////////////////////////////////////////////
+    public static int getX(int x) {
+        return (x + XBORDER + WINDOW_BORDER);
+    }
+
+    public static int getY(int y) {
+//        return (y + YBORDER + YTITLE );
+        return (y + TOP_BORDER + YTITLE );
+        
+    }
+
+    public static int getYNormal(int y) {
+//          return (-y + YBORDER + YTITLE + getHeight2());
+      return (-y + TOP_BORDER + YTITLE + getHeight2());
+        
+    }
+    
+    public static int getWidth2() {
+        return (xsize - 2 * (XBORDER + WINDOW_BORDER));
+    }
+
+    public static int getHeight2() {
+//        return (ysize - 2 * YBORDER - WINDOW_BORDER - YTITLE);
+        return (ysize - (BOTTOM_BORDER + TOP_BORDER) - WINDOW_BORDER - YTITLE);
+    }    
+    
+
+}
